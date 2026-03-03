@@ -18,78 +18,65 @@ conda activate geolocal
 mkdir -p runs
 
 echo "================================================"
-echo "Elevated-View Geolocalization Evaluation"
-echo "VGGT output: $VGGT_OUTPUT_DIR"
-echo "Aerial dir : $AERIAL_DIR"
-echo "Start time : $(date)"
+echo "Multi-View Elevated Geolocalization"
+echo "  Architecture : ResNet18 + cross-view Transformer (CLS attention)"
+echo "  Views        : ground_0deg + elevated_45deg + elevated_110deg"
+echo "  Loss         : symmetric InfoNCE contrastive"
+echo "  VGGT output  : $VGGT_OUTPUT_DIR"
+echo "  Aerial dir   : $AERIAL_DIR"
+echo "  Start time   : $(date)"
 echo "================================================"
 
-# ── 1. Ground-level view (0 deg) ─────────────────────────────────
+# ── Option A: zero-shot eval (pretrained backbone, no training) ──
 echo ""
-echo ">>> [1/4] Ground view (0 deg)"
+echo ">>> [1/2] Zero-shot evaluation (pretrained backbone)"
 python evaluate_elevated.py \
     --vggt_output_dir "$VGGT_OUTPUT_DIR" \
-    --aerial_dir "$AERIAL_DIR" \
-    --views ground \
-    --backbone resnet18 \
-    --embed_dim 512 \
-    --batch_size 64 \
-    --output_file results_elevated_ground.json
+    --aerial_dir      "$AERIAL_DIR" \
+    --backbone        resnet18 \
+    --embed_dim       512 \
+    --num_heads       8 \
+    --num_layers      2 \
+    --val_split       0.2 \
+    --batch_size      64 \
+    --num_workers     4 \
+    --output_file     results_elevated_zeroshot.json
 
-# ── 2. Elevated 45-degree view ────────────────────────────────────
+# ── Option B: contrastive training then eval ─────────────────────
 echo ""
-echo ">>> [2/4] Elevated 45-degree view"
+echo ">>> [2/2] Contrastive training + evaluation"
 python evaluate_elevated.py \
     --vggt_output_dir "$VGGT_OUTPUT_DIR" \
-    --aerial_dir "$AERIAL_DIR" \
-    --views elevated_45 \
-    --backbone resnet18 \
-    --embed_dim 512 \
-    --batch_size 64 \
-    --output_file results_elevated_45deg.json
-
-# ── 3. Elevated 110-degree (near-top-down) view ───────────────────
-echo ""
-echo ">>> [3/4] Elevated 110-degree view"
-python evaluate_elevated.py \
-    --vggt_output_dir "$VGGT_OUTPUT_DIR" \
-    --aerial_dir "$AERIAL_DIR" \
-    --views elevated_110 \
-    --backbone resnet18 \
-    --embed_dim 512 \
-    --batch_size 64 \
-    --output_file results_elevated_110deg.json
-
-# ── 4. All-views fusion (mean-pooled embeddings) ──────────────────
-echo ""
-echo ">>> [4/4] All-views fusion (ground + 45 + 110)"
-python evaluate_elevated.py \
-    --vggt_output_dir "$VGGT_OUTPUT_DIR" \
-    --aerial_dir "$AERIAL_DIR" \
-    --views ground,elevated_45,elevated_110 \
-    --backbone resnet18 \
-    --embed_dim 512 \
-    --batch_size 32 \
-    --output_file results_elevated_fusion.json
+    --aerial_dir      "$AERIAL_DIR" \
+    --train \
+    --backbone        resnet18 \
+    --embed_dim       512 \
+    --num_heads       8 \
+    --num_layers      2 \
+    --epochs          20 \
+    --lr              1e-4 \
+    --weight_decay    1e-4 \
+    --temperature     0.07 \
+    --val_split       0.2 \
+    --batch_size      64 \
+    --num_workers     4 \
+    --checkpoint      best_elevated.pth \
+    --output_file     results_elevated_trained.json
 
 echo ""
 echo "================================================"
-echo "All evaluations complete!"
-echo "End time: $(date)"
+echo "Done! End time: $(date)"
 echo "================================================"
 
-# ── Summary ───────────────────────────────────────────────────────
 echo ""
-echo "SUMMARY (R@1 / R@5 / R@10 / R@1%):"
-for f in results_elevated_ground.json \
-          results_elevated_45deg.json \
-          results_elevated_110deg.json \
-          results_elevated_fusion.json; do
+echo "SUMMARY:"
+for f in results_elevated_zeroshot.json results_elevated_trained.json; do
     if [ -f "$f" ]; then
-        r1=$(python  -c "import json; d=json.load(open('$f')); print(f\"{d['R@1']:.2f}\")")
-        r5=$(python  -c "import json; d=json.load(open('$f')); print(f\"{d['R@5']:.2f}\")")
-        r10=$(python -c "import json; d=json.load(open('$f')); print(f\"{d['R@10']:.2f}\")")
-        r1p=$(python -c "import json; d=json.load(open('$f')); print(f\"{d['R@1%']:.2f}\")")
-        echo "  $f : $r1 / $r5 / $r10 / $r1p"
+        python -c "
+import json
+d = json.load(open('$f'))
+print(f'  $f')
+print(f\"    R@1={d['R@1']:.2f}%  R@5={d['R@5']:.2f}%  R@10={d['R@10']:.2f}%  R@1%={d['R@1%']:.2f}%\")
+"
     fi
 done
