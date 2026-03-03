@@ -551,7 +551,7 @@ def main(args):
                     'args':           vars(args),
                     'results':        results,
                 }, args.checkpoint)
-                print(f"  ★ New best R@1={best_r1:.2f}%  →  saved to {args.checkpoint}")
+                print(f"  * New best R@1={best_r1:.2f}%  ->  saved to {args.checkpoint}")
 
         print_results(best_results, label='best val')
 
