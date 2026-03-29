@@ -440,18 +440,33 @@ def main(args):
         T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    # ── Video-ID split ────────────────────────────────────────────
-    all_video_ids = sorted(
-        d.name for d in Path(args.vggt_output_dir).iterdir() if d.is_dir()
-    )
-    random.shuffle(all_video_ids)
-    n_val     = max(1, int(len(all_video_ids) * args.val_split))
-    val_ids   = set(all_video_ids[:n_val])
-    train_ids = set(all_video_ids[n_val:])
-    print(f"\nVideos  : {len(all_video_ids)} total  |  train {len(train_ids)}  |  val {len(val_ids)}")
+    # ── Video-ID split (or explicit train/test dirs) ──────────────
+    if args.train_dir and args.test_dir:
+        # Use pre-split directories
+        train_root = Path(args.train_dir)
+        test_root  = Path(args.test_dir)
+        train_ids  = set(d.name for d in train_root.iterdir() if d.is_dir())
+        val_ids    = set(d.name for d in test_root.iterdir()  if d.is_dir())
+        print(f"\nUsing explicit split:")
+        print(f"  Train dir : {train_root}  ({len(train_ids)} videos)")
+        print(f"  Test  dir : {test_root}   ({len(val_ids)} videos)")
+        query_root = str(test_root)
+    else:
+        if not args.vggt_output_dir:
+            raise ValueError("Provide --vggt_output_dir or both --train_dir and --test_dir")
+        # Fall back to random split of vggt_output_dir
+        all_video_ids = sorted(
+            d.name for d in Path(args.vggt_output_dir).iterdir() if d.is_dir()
+        )
+        random.shuffle(all_video_ids)
+        n_val     = max(1, int(len(all_video_ids) * args.val_split))
+        val_ids   = set(all_video_ids[:n_val])
+        train_ids = set(all_video_ids[n_val:])
+        print(f"\nVideos  : {len(all_video_ids)} total  |  train {len(train_ids)}  |  val {len(val_ids)}")
+        query_root = args.vggt_output_dir
 
     # ── Evaluation datasets (always built) ────────────────────────
-    val_query   = QueryDataset(args.vggt_output_dir, val_ids,   transform)
+    val_query   = QueryDataset(query_root, val_ids, transform)
     val_pairs   = {(s['video_id'], s['clip_idx']) for s in val_query.samples}
     val_gallery = AerialGalleryDataset(args.aerial_dir, valid_pairs=val_pairs, transform=transform)
 
@@ -478,7 +493,8 @@ def main(args):
     # ── Training ─────────────────────────────────────────────────
     if args.train:
         train_dataset = PairedDataset(
-            args.vggt_output_dir, args.aerial_dir, train_ids, transform
+            args.train_dir if args.train_dir else args.vggt_output_dir,
+            args.aerial_dir, train_ids, transform
         )
         if len(train_dataset) == 0:
             raise RuntimeError("No training pairs found. Check paths and val_split.")
@@ -582,8 +598,13 @@ if __name__ == '__main__':
         description='Multi-view elevated geolocalization — attention + contrastive'
     )
     # Paths
-    p.add_argument('--vggt_output_dir', required=True,
-                   help='Root vggt-output dir: <video_id>/clip_XXXX/{ground,elevated_45,elevated_110}.png')
+    p.add_argument('--vggt_output_dir', default=None,
+                   help='Root vggt-output dir (used for random val_split mode): '
+                        '<video_id>/clip_XXXX/{ground,elevated_45,elevated_110}.png')
+    p.add_argument('--train_dir', default=None,
+                   help='Pre-split train dir (overrides vggt_output_dir + val_split)')
+    p.add_argument('--test_dir', default=None,
+                   help='Pre-split test dir (overrides vggt_output_dir + val_split)')
     p.add_argument('--aerial_dir', required=True,
                    help='Aerial gallery dir: <video_id>/<clip_idx>.{png|jpg}')
 
