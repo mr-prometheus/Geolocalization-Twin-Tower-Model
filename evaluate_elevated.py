@@ -492,9 +492,13 @@ def main(args):
 
     # ── Training ─────────────────────────────────────────────────
     if args.train:
+        train_aerial = args.train_aerial_dir if args.train_aerial_dir else args.aerial_dir
+        if not Path(train_aerial).exists():
+            raise RuntimeError(f"Train aerial dir not found: {train_aerial}\n"
+                               "Pass --train_aerial_dir pointing to e.g. train_gps/")
         train_dataset = PairedDataset(
             args.train_dir if args.train_dir else args.vggt_output_dir,
-            args.aerial_dir, train_ids, transform
+            train_aerial, train_ids, transform
         )
         if len(train_dataset) == 0:
             raise RuntimeError("No training pairs found. Check paths and val_split.")
@@ -607,6 +611,8 @@ if __name__ == '__main__':
                    help='Pre-split test dir (overrides vggt_output_dir + val_split)')
     p.add_argument('--aerial_dir', required=True,
                    help='Aerial gallery dir: <video_id>/<clip_idx>.{png|jpg}')
+    p.add_argument('--train_aerial_dir', default=None,
+                   help='Aerial dir for training pairs (defaults to --aerial_dir if not set)')
 
     # Model
     p.add_argument('--backbone',   default='resnet18', choices=['resnet18', 'resnet34'])

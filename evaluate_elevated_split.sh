@@ -9,6 +9,7 @@ BASE="/home/de575594/Deepan/CV/geolocalization/vggt-long/datasets/bdd_dataset_da
 TRAIN_DIR="$BASE/vggt-output-train-rendered"
 TEST_DIR="$BASE/vggt-output-test-rendered"
 AERIAL_DIR="/home/c3-0/datasets/GAMa_dataset/val_gps"
+TRAIN_AERIAL_DIR="/home/c3-0/datasets/GAMa_dataset/train_gps"
 # =======================
 
 module load anaconda3
@@ -52,11 +53,12 @@ python evaluate_elevated.py \
 echo ""
 echo ">>> [2/2] Contrastive training (train split) + evaluation (test split)"
 python evaluate_elevated.py \
-    --train_dir    "$TRAIN_DIR" \
-    --test_dir     "$TEST_DIR" \
-    --aerial_dir   "$AERIAL_DIR" \
+    --train_dir         "$TRAIN_DIR" \
+    --test_dir          "$TEST_DIR" \
+    --aerial_dir        "$AERIAL_DIR" \
+    --train_aerial_dir  "$TRAIN_AERIAL_DIR" \
     --train \
-    --backbone     resnet18 \
+    --backbone          resnet18 \
     --embed_dim    512 \
     --num_heads    8 \
     --num_layers   2 \
